@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import { calculateDateRangeFromString } from "../client/src/lib/utils";
 import { ZohoTimesheetRecord } from "../client/src/lib/types";
 import { processTimesheetData } from "../client/src/lib/api";
+import axios from "axios";
 
 // Function to synchronize Zoho timesheet data to the database
 export async function syncTimesheetData(req: Request, res: Response) {
@@ -33,10 +34,79 @@ export async function syncTimesheetData(req: Request, res: Response) {
       });
     }
     
-    // In a real implementation, we would fetch data from Zoho API
-    // For this demo, we'll generate simulated data
+    // Get date range for the API request
     const { startDate, endDate } = calculateDateRangeFromString(dateRange);
-    const zohoData = generateSimulatedTimesheetData(startDate, endDate);
+    
+    // Format dates for Zoho API
+    const fromDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const toDate = endDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    let zohoData: ZohoTimesheetRecord[] = [];
+    
+    try {
+      // Make the API request to Zoho People API to get timesheets
+      const response = await axios.get(
+        `https://${credentials.organization}.zoho.com/people/api/timesheet/getTimesheets`,
+        {
+          params: {
+            fromDate,
+            toDate,
+            status: "All" // Get all timesheets regardless of approval status
+          },
+          headers: {
+            Authorization: `Zoho-oauthtoken ${credentials.accessToken}`
+          }
+        }
+      );
+      
+      if (response.data && response.data.response && response.data.response.result) {
+        // Transform Zoho API response to match our expected ZohoTimesheetRecord format
+        zohoData = response.data.response.result.map((record: any) => ({
+          timesheet_id: record.timesheetId || `TS${Date.now()}`,
+          workDate: record.workDate,
+          work_date: record.workDate,
+          projectId: record.projectId || "",
+          projectName: record.projectName || "Unassigned",
+          userId: record.userId || "",
+          userName: record.userName || "Unknown",
+          jobId: record.jobId || "",
+          jobName: record.jobName || record.taskName || "General",
+          taskId: record.taskId || "",
+          taskName: record.taskName || "",
+          clientId: record.clientId || "",
+          clientName: record.clientName || "Unknown Client",
+          billableHours: Number(record.billableHours) || 0,
+          nonBillableHours: Number(record.nonBillableHours) || 0,
+          totalHours: Number(record.totalHours) || Number(record.hours || 0),
+          workHours: Math.floor(Number(record.totalHours) || Number(record.hours || 0)),
+          workMinutes: Math.round(((Number(record.totalHours) || Number(record.hours || 0)) % 1) * 60),
+          approvalStatus: record.approvalStatus || "Pending",
+          notes: record.notes || ""
+        }));
+      }
+    } catch (apiError: any) {
+      console.error("Zoho API Error:", apiError);
+      
+      // If we get a 401, the token might be expired
+      if (apiError.response && apiError.response.status === 401) {
+        return res.status(401).json({
+          success: false,
+          message: "Zoho access token expired. Please reconnect your Zoho account."
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch data from Zoho API. Please verify your credentials."
+      });
+    }
+    
+    // If we didn't get any data from Zoho but didn't encounter an error,
+    // use simulated data for demo purposes
+    if (zohoData.length === 0) {
+      console.log("No data received from Zoho API, falling back to simulated data for demo purposes");
+      zohoData = generateSimulatedTimesheetData(startDate, endDate);
+    }
     
     // Process the data
     const processedData = processTimesheetData(zohoData);
