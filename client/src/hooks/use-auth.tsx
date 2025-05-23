@@ -4,7 +4,7 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser } from "@shared/schema";
+import { User as SelectUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ZohoCredentials } from "@/components/connect-modal";
@@ -15,7 +15,7 @@ type AuthContextType = {
   error: Error | null;
   loginMutation: UseMutationResult<any, Error, LoginData>;
   logoutMutation: UseMutationResult<any, Error, void>;
-  registerMutation: UseMutationResult<any, Error, RegisterData>;
+  changePasswordMutation: UseMutationResult<any, Error, ChangePasswordData>;
   connectZohoMutation: UseMutationResult<any, Error, ZohoCredentials>;
   disconnectZohoMutation: UseMutationResult<any, Error, void>;
   isZohoConnected: boolean;
@@ -27,11 +27,9 @@ type LoginData = {
   password: string;
 };
 
-type RegisterData = {
-  username: string;
-  password: string;
-  displayName?: string;
-  email?: string;
+type ChangePasswordData = {
+  currentPassword: string;
+  newPassword: string;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -89,27 +87,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Handle registration
-  const registerMutation = useMutation({
-    mutationFn: async (userData: RegisterData) => {
-      const res = await apiRequest("POST", "/api/register", userData);
+  // Handle password change
+  const changePasswordMutation = useMutation({
+    mutationFn: async (passwordData: ChangePasswordData) => {
+      const res = await apiRequest("POST", "/api/change-password", passwordData);
       return await res.json();
     },
     onSuccess: (data) => {
       if (data.success) {
-        queryClient.setQueryData(["/api/user"], data.user);
-        
         toast({
-          title: "Registration successful",
-          description: `Welcome, ${data.user.displayName || data.user.username}!`,
+          title: "Password updated",
+          description: "Your password has been changed successfully.",
         });
       } else {
-        throw new Error(data.message || "Registration failed");
+        throw new Error(data.message || "Failed to change password");
       }
     },
     onError: (error: Error) => {
       toast({
-        title: "Registration failed",
+        title: "Password change failed",
         description: error.message,
         variant: "destructive",
       });
@@ -204,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error,
         loginMutation,
         logoutMutation,
-        registerMutation,
+        changePasswordMutation,
         connectZohoMutation,
         disconnectZohoMutation,
         isZohoConnected: !!zohoStatus?.connected,

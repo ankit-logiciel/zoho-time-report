@@ -54,12 +54,6 @@ export default function Sidebar({
       active: location === "/revenue-opportunities"
     },
     {
-      name: "Timesheet",
-      path: "/timesheet",
-      icon: <User className="mr-3 h-5 w-5" />,
-      active: location === "/timesheet"
-    },
-    {
       name: "Settings",
       path: "/settings",
       icon: <Settings className="mr-3 h-5 w-5" />,

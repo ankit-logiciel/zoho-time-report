@@ -1,6 +1,5 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
@@ -30,11 +29,8 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-export function setupAuth(app: Express) {
+export async function setupAuth(app: Express) {
   const SESSION_SECRET = process.env.SESSION_SECRET || randomBytes(32).toString('hex');
-  const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-  const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-  const CALLBACK_URL = process.env.CALLBACK_URL || 'http://localhost:3000/api/auth/google/callback';
 
   // Session setup
   const sessionSettings: session.SessionOptions = {
@@ -68,57 +64,6 @@ export function setupAuth(app: Express) {
     }),
   );
 
-  // Google authentication strategy
-  if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-    passport.use(
-      new GoogleStrategy(
-        {
-          clientID: GOOGLE_CLIENT_ID,
-          clientSecret: GOOGLE_CLIENT_SECRET,
-          callbackURL: CALLBACK_URL,
-          scope: ["profile", "email"],
-        },
-        async (accessToken, refreshToken, profile, done) => {
-          try {
-            // Check if user already exists
-            let user = await storage.getUserByGoogleId(profile.id);
-            
-            if (!user) {
-              // Create a new user
-              const email = profile.emails && profile.emails[0] ? profile.emails[0].value : '';
-              const displayName = profile.displayName || '';
-              const photoUrl = profile.photos && profile.photos[0] ? profile.photos[0].value : '';
-              
-              // Generate a random username if email is available, otherwise use profile ID
-              const baseUsername = email ? email.split('@')[0] : `user${profile.id}`;
-              let username = baseUsername;
-              let counter = 1;
-              
-              // Keep trying to find a unique username
-              while (await storage.getUserByUsername(username)) {
-                username = `${baseUsername}${counter}`;
-                counter++;
-              }
-              
-              user = await storage.createUser({
-                username,
-                password: await hashPassword(randomBytes(16).toString('hex')), // Random password
-                displayName,
-                email,
-                profilePicture: photoUrl,
-                googleId: profile.id,
-              });
-            }
-            
-            return done(null, user);
-          } catch (error) {
-            return done(error as Error);
-          }
-        }
-      )
-    );
-  }
-
   // User serialization/deserialization
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id: number, done) => {
@@ -130,59 +75,30 @@ export function setupAuth(app: Express) {
     }
   });
 
-  // Auth routes
-  app.post("/api/register", async (req, res, next) => {
-    try {
-      const { username, password, displayName, email } = req.body;
-      
-      // Validate required fields
-      if (!username || !password) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Username and password are required" 
-        });
-      }
-      
-      // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username);
-      if (existingUser) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Username already exists" 
-        });
-      }
-
-      // Create new user
-      const user = await storage.createUser({
-        username,
-        password: await hashPassword(password),
-        displayName: displayName || null,
-        email: email || null,
+  // Create admin account if it doesn't exist
+  const adminEmail = "ankit@logiciel.io";
+  const adminUsername = "admin";
+  const defaultPassword = "password123"; // Default password for initial setup
+  
+  try {
+    // Check if admin user exists
+    const existingAdmin = await storage.getUserByUsername(adminUsername);
+    
+    if (!existingAdmin) {
+      // Create the admin user
+      await storage.createUser({
+        username: adminUsername,
+        password: await hashPassword(defaultPassword),
+        displayName: "Admin",
+        email: adminEmail,
       });
-
-      // Login the new user
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json({ 
-          success: true, 
-          user: {
-            id: user.id,
-            username: user.username,
-            displayName: user.displayName,
-            email: user.email,
-            profilePicture: user.profilePicture
-          }
-        });
-      });
-    } catch (error) {
-      console.error("Registration error:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : "Registration failed" 
-      });
+      console.log("Admin account created successfully");
     }
-  });
+  } catch (error) {
+    console.error("Error setting up admin account:", error);
+  }
 
+  // Login route
   app.post("/api/login", (req, res, next) => {
     passport.authenticate("local", (err, user, info) => {
       if (err) return next(err);
@@ -202,26 +118,71 @@ export function setupAuth(app: Express) {
             username: user.username,
             displayName: user.displayName,
             email: user.email,
-            profilePicture: user.profilePicture
           }
         });
       });
     })(req, res, next);
   });
 
-  // Google OAuth routes
-  if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
-    app.get("/api/auth/google", passport.authenticate("google"));
+  // Change password route
+  app.post("/api/change-password", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ 
+        success: false, 
+        message: "Not authenticated" 
+      });
+    }
+    
+    try {
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password and new password are required"
+        });
+      }
+      
+      // Get the user and verify current password
+      const user = await storage.getUser(req.user.id);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+      
+      const passwordMatch = await comparePasswords(currentPassword, user.password);
+      
+      if (!passwordMatch) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password is incorrect"
+        });
+      }
+      
+      // Hash the new password and update the user
+      const hashedPassword = await hashPassword(newPassword);
+      
+      await storage.updateUser(user.id, {
+        password: hashedPassword
+      });
+      
+      res.json({
+        success: true,
+        message: "Password changed successfully"
+      });
+    } catch (error) {
+      console.error("Change password error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to change password"
+      });
+    }
+  });
 
-    app.get(
-      "/api/auth/google/callback",
-      passport.authenticate("google", { 
-        failureRedirect: "/auth",
-        successRedirect: "/"
-      })
-    );
-  }
-
+  // Logout route
   app.post("/api/logout", (req, res, next) => {
     req.logout((err) => {
       if (err) return next(err);
@@ -229,6 +190,7 @@ export function setupAuth(app: Express) {
     });
   });
 
+  // Get current user route
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ 
@@ -244,7 +206,6 @@ export function setupAuth(app: Express) {
       username: user.username,
       displayName: user.displayName,
       email: user.email,
-      profilePicture: user.profilePicture,
     });
   });
 

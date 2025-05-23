@@ -11,6 +11,7 @@ import Dashboard from "@/pages/dashboard";
 import ReportBuilder from "@/pages/report-builder";
 import RevenueOpportunities from "@/pages/revenue-opportunities";
 import AuthPage from "@/pages/auth-page";
+import SettingsPage from "@/pages/settings";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <ProtectedRoute path="/" component={Dashboard} />
       <ProtectedRoute path="/report-builder" component={ReportBuilder} />
       <ProtectedRoute path="/revenue-opportunities" component={RevenueOpportunities} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
