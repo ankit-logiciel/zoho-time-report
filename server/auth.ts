@@ -1,6 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
@@ -27,6 +27,30 @@ async function comparePasswords(supplied: string, stored: string) {
   const hashedBuf = Buffer.from(hashed, "hex");
   const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
   return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+// Middleware to ensure the user is authenticated
+export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  
+  res.status(401).json({
+    success: false,
+    message: "Authentication required"
+  });
+}
+
+// Middleware to ensure the user is an admin
+export function isAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.isAuthenticated() && req.user?.username === "admin") {
+    return next();
+  }
+  
+  res.status(403).json({
+    success: false,
+    message: "Admin privileges required"
+  });
 }
 
 export async function setupAuth(app: Express) {
@@ -65,7 +89,7 @@ export async function setupAuth(app: Express) {
   );
 
   // User serialization/deserialization
-  passport.serializeUser((user, done) => done(null, user.id));
+  passport.serializeUser((user: any, done) => done(null, user.id));
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
@@ -98,9 +122,11 @@ export async function setupAuth(app: Express) {
     console.error("Error setting up admin account:", error);
   }
 
+  // Authentication routes
+  
   // Login route
   app.post("/api/login", (req, res, next) => {
-    // Add a special header to ensure we can identify API responses
+    // Ensure the response is JSON
     res.setHeader('Content-Type', 'application/json');
     
     passport.authenticate("local", (err: any, user: any, info: any) => {
@@ -127,8 +153,16 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  // Change password route
-  app.post("/api/change-password", async (req, res) => {
+  // Logout route
+  app.post("/api/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.status(200).json({ success: true });
+    });
+  });
+
+  // Get current user route
+  app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ 
         success: false, 
@@ -136,6 +170,93 @@ export async function setupAuth(app: Express) {
       });
     }
     
+    // Return user info without sensitive data
+    const user = req.user;
+    res.json({
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      email: user.email,
+    });
+  });
+
+  // User management routes
+  
+  // Get all users (admin only)
+  app.get("/api/users", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const users = await storage.getAllUsers();
+      
+      // Return users without sensitive data
+      res.json(users.map(user => ({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        email: user.email,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      })));
+    } catch (error) {
+      console.error("Get users error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to get users"
+      });
+    }
+  });
+  
+  // Create a new user (admin only)
+  app.post("/api/users", isAdmin, async (req: Request, res: Response) => {
+    try {
+      const { username, password, displayName, email } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Username and password are required"
+        });
+      }
+      
+      // Check if username already exists
+      const existingUser = await storage.getUserByUsername(username);
+      
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message: "Username already exists"
+        });
+      }
+      
+      // Create the new user
+      const hashedPassword = await hashPassword(password);
+      
+      const newUser = await storage.createUser({
+        username,
+        password: hashedPassword,
+        displayName: displayName || null,
+        email: email || null,
+      });
+      
+      res.status(201).json({
+        success: true,
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          displayName: newUser.displayName,
+          email: newUser.email,
+        }
+      });
+    } catch (error) {
+      console.error("Create user error:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to create user"
+      });
+    }
+  });
+
+  // Change password route
+  app.post("/api/change-password", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { currentPassword, newPassword } = req.body;
       
@@ -147,7 +268,7 @@ export async function setupAuth(app: Express) {
       }
       
       // Get the user and verify current password
-      const user = await storage.getUser(req.user.id);
+      const user = await storage.getUser(req.user!.id);
       
       if (!user) {
         return res.status(404).json({
@@ -185,42 +306,8 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  // Logout route
-  app.post("/api/logout", (req, res, next) => {
-    req.logout((err) => {
-      if (err) return next(err);
-      res.status(200).json({ success: true });
-    });
-  });
-
-  // Get current user route
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ 
-        success: false, 
-        message: "Not authenticated" 
-      });
-    }
-    
-    // Return user info without sensitive data
-    const user = req.user;
-    res.json({
-      id: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      email: user.email,
-    });
-  });
-
   // Zoho connection/disconnection for authenticated users
-  app.post("/api/zoho/connect", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
+  app.post("/api/zoho/connect", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { clientId, clientSecret, organization } = req.body as ZohoCredentialsType;
       
@@ -238,7 +325,7 @@ export async function setupAuth(app: Express) {
       const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour from now
       
       // Save/update Zoho credentials for this user
-      const existingCredentials = await storage.getZohoCredentials(req.user.id);
+      const existingCredentials = await storage.getZohoCredentials(req.user!.id);
       
       if (existingCredentials) {
         await storage.updateZohoCredentials(existingCredentials.id, {
@@ -251,7 +338,7 @@ export async function setupAuth(app: Express) {
         });
       } else {
         await storage.saveZohoCredentials({
-          userId: req.user.id,
+          userId: req.user!.id,
           clientId,
           clientSecret,
           organization,
@@ -274,17 +361,10 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/zoho/disconnect", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
+  app.post("/api/zoho/disconnect", isAuthenticated, async (req: Request, res: Response) => {
     try {
       // Get existing credentials
-      const credentials = await storage.getZohoCredentials(req.user.id);
+      const credentials = await storage.getZohoCredentials(req.user!.id);
       
       if (credentials) {
         // Update to remove tokens
@@ -308,16 +388,9 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/zoho/status", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
+  app.get("/api/zoho/status", isAuthenticated, async (req: Request, res: Response) => {
     try {
-      const credentials = await storage.getZohoCredentials(req.user.id);
+      const credentials = await storage.getZohoCredentials(req.user!.id);
       
       res.json({
         connected: !!credentials?.accessToken,

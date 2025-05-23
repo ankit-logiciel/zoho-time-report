@@ -29,9 +29,48 @@ export default function AuthPage() {
     try {
       setIsSubmitting(true);
       
-      // Hard-coded admin account check - since the server-side login is not working properly
+      // Make the API request to the backend
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(loginData),
+        credentials: "include"
+      });
+      
+      // Get the response as text first
+      const responseText = await response.text();
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Failed to parse response as JSON:", responseText);
+        throw new Error("Server returned an invalid response");
+      }
+      
+      // Check if login was successful
+      if (data.success) {
+        // Update user in the cache
+        queryClient.setQueryData(["/api/user"], data.user);
+        
+        // Show success message
+        toast({
+          title: "Logged in successfully",
+          description: `Welcome back, ${data.user.displayName || data.user.username}!`,
+        });
+        
+        // Navigate to the dashboard
+        navigate("/");
+      } else {
+        throw new Error(data.message || "Login failed");
+      }
+    } catch (error) {
+      // Fallback to client-side login for demo purposes
       if (loginData.username === "admin" && loginData.password === "password123") {
-        // Create a static admin user
         const adminUser = {
           id: 1,
           username: "admin",
@@ -39,30 +78,17 @@ export default function AuthPage() {
           email: "ankit@logiciel.io"
         };
         
-        // Store in localStorage for persistence
-        localStorage.setItem("currentUser", JSON.stringify(adminUser));
-        
-        // Update user in the cache
         queryClient.setQueryData(["/api/user"], adminUser);
         
-        // Show success message
         toast({
-          title: "Logged in successfully",
-          description: `Welcome back, ${adminUser.displayName || adminUser.username}!`,
+          title: "Logged in successfully (client-side)",
+          description: `Welcome back, ${adminUser.displayName}!`,
         });
         
-        // Navigate to the dashboard
         navigate("/");
         return;
       }
       
-      // If not the admin account, show error
-      toast({
-        title: "Login failed",
-        description: "Invalid username or password",
-        variant: "destructive",
-      });
-    } catch (error) {
       toast({
         title: "Login failed",
         description: error instanceof Error ? error.message : "An error occurred during login",
