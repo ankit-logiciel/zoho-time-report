@@ -5,11 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Clock, LineChart, BarChart3 } from "lucide-react";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 
 export default function AuthPage() {
-  const { user, isLoading, loginMutation } = useAuth();
+  const { user, isLoading } = useAuth();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Login form state
   const [loginData, setLoginData] = useState({
@@ -18,9 +23,66 @@ export default function AuthPage() {
   });
   
   // Form submission handlers
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    loginMutation.mutate(loginData);
+    
+    try {
+      setIsSubmitting(true);
+      
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(loginData),
+        credentials: "include"
+      });
+      
+      const contentType = response.headers.get("content-type");
+      
+      if (!response.ok) {
+        let errorMessage = "Login failed";
+        
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } else {
+          errorMessage = await response.text() || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
+      }
+      
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Unexpected response from server");
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update user in the cache
+        queryClient.setQueryData(["/api/user"], data.user);
+        
+        // Show success message
+        toast({
+          title: "Logged in successfully",
+          description: `Welcome back, ${data.user.displayName || data.user.username}!`,
+        });
+        
+        // Navigate to the dashboard
+        navigate("/");
+      } else {
+        throw new Error(data.message || "Login failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Login failed",
+        description: error instanceof Error ? error.message : "An error occurred during login",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   // Redirect if user is already logged in
@@ -85,9 +147,9 @@ export default function AuthPage() {
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={loginMutation.isPending}
+                  disabled={isSubmitting}
                 >
-                  {loginMutation.isPending ? "Logging in..." : "Login"}
+                  {isSubmitting ? "Logging in..." : "Login"}
                 </Button>
                 
                 <div className="text-center text-xs text-muted-foreground mt-4">
