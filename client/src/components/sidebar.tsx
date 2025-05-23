@@ -7,7 +7,8 @@ import {
   Settings, 
   LogOut, 
   RefreshCw, 
-  X
+  X,
+  DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -39,6 +40,12 @@ export default function Sidebar({
       path: "/report-builder",
       icon: <Table className="mr-3 h-5 w-5" />,
       active: location === "/report-builder"
+    },
+    {
+      name: "Revenue Opportunities",
+      path: "/revenue-opportunities",
+      icon: <DollarSign className="mr-3 h-5 w-5" />,
+      active: location === "/revenue-opportunities"
     },
     {
       name: "Timesheet",

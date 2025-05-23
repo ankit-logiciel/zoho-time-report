@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -15,12 +15,20 @@ import {
   InfoIcon,
   Calendar,
   BarChart3,
-  TrendingUp
+  TrendingUp,
+  Download as DownloadIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem, 
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { 
   LineChart, 
   Line, 
@@ -131,6 +139,7 @@ export default function DashboardEnhanced() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [dateRange, setDateRange] = useState("Last 7 days");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string>("All Projects");
   
   const { isConnected, connect, disconnect } = useZoho();
 
@@ -138,6 +147,16 @@ export default function DashboardEnhanced() {
     queryKey: ["/api/zoho/timesheet", dateRange],
     enabled: isConnected,
   });
+  
+  // Extract list of projects for the filter
+  const projectList = useMemo(() => {
+    if (!timesheetData?.projectHours) return [];
+    
+    return [
+      "All Projects",
+      ...timesheetData.projectHours.map(project => project.name)
+    ];
+  }, [timesheetData?.projectHours]);
 
   // Stats data derived from timesheet data
   const stats = {
@@ -204,13 +223,66 @@ export default function DashboardEnhanced() {
             </Alert>
           )}
 
-          {/* Dashboard header */}
-          <Header 
-            dateRange={dateRange} 
-            onDateRangeChange={setDateRange} 
-            isConnected={isConnected}
-            timesheetData={timesheetData}
-          />
+          {/* Dashboard header with filters */}
+          <div className="py-6 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center flex-wrap sm:flex-nowrap">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Dashboard</h1>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  Overview of your timesheet data from Zoho People
+                </p>
+              </div>
+              <div className="flex items-center mt-4 sm:mt-0 space-x-3">
+                {/* Project Filter */}
+                <div>
+                  <Select 
+                    value={selectedProject} 
+                    onValueChange={setSelectedProject}
+                    disabled={!isConnected}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectList.map(project => (
+                        <SelectItem key={project} value={project}>
+                          {project}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Date Range Filter */}
+                <div>
+                  <Select 
+                    value={dateRange} 
+                    onValueChange={setDateRange}
+                    disabled={!isConnected}
+                  >
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Select range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Last 7 days">Last 7 days</SelectItem>
+                      <SelectItem value="This month">This month</SelectItem>
+                      <SelectItem value="Last month">Last month</SelectItem>
+                      <SelectItem value="Custom range">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <Button 
+                  onClick={() => {
+                    // Download action would go here
+                  }}
+                  disabled={!isConnected || !timesheetData}
+                >
+                  <DownloadIcon className="mr-2 h-4 w-4" /> Export
+                </Button>
+              </div>
+            </div>
+          </div>
 
           {/* Dashboard content */}
           <div className="py-6 px-4 sm:px-6 lg:px-8">

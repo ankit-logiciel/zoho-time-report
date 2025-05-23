@@ -4,14 +4,16 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import DashboardEnhanced from "@/pages/dashboard-enhanced";
+import Dashboard from "@/pages/dashboard";
 import ReportBuilder from "@/pages/report-builder";
+import RevenueOpportunities from "@/pages/revenue-opportunities";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={DashboardEnhanced} />
+      <Route path="/" component={Dashboard} />
       <Route path="/report-builder" component={ReportBuilder} />
+      <Route path="/revenue-opportunities" component={RevenueOpportunities} />
       <Route component={NotFound} />
     </Switch>
   );
