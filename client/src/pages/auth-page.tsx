@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SiZoho, SiGoogle } from "react-icons/si";
-import { Eye, EyeOff, Clock, ChartLineUp, BarChart3 } from "lucide-react";
+import { Eye, EyeOff, Clock, LineChart, BarChart3 } from "lucide-react";
 import { Redirect } from "wouter";
 
 export default function AuthPage() {
@@ -283,7 +283,7 @@ export default function AuthPage() {
             
             <div className="flex items-start space-x-3">
               <div className="bg-primary/20 p-2 rounded-full">
-                <ChartLineUp className="h-5 w-5 text-primary" />
+                <LineChart className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <h3 className="font-medium">Revenue optimization</h3>

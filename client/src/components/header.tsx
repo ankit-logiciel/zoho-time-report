@@ -7,20 +7,25 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import SyncButton from "@/components/sync-button";
+import { useAuth } from "@/hooks/use-auth";
 
 interface HeaderProps {
   dateRange: string;
   onDateRangeChange: (value: string) => void;
   isConnected: boolean;
   timesheetData: any;
+  onDataRefresh?: () => void;
 }
 
 export default function Header({ 
   dateRange, 
   onDateRangeChange,
   isConnected,
-  timesheetData 
+  timesheetData,
+  onDataRefresh
 }: HeaderProps) {
+  const { isZohoConnected } = useAuth();
   
   const handleExport = () => {
     if (!timesheetData || !timesheetData.timeEntries) return;
