@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { SyncIcon } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -63,7 +63,7 @@ export default function SyncButton({ dateRange, onSyncComplete }: SyncButtonProp
       disabled={isSyncing || !isZohoConnected}
       className="gap-2"
     >
-      <SyncIcon className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+      <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
       {isSyncing ? "Syncing..." : "Sync Timesheet Data"}
     </Button>
   );

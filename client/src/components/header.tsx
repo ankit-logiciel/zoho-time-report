@@ -80,7 +80,7 @@ export default function Header({
             <Select 
               value={dateRange} 
               onValueChange={onDateRangeChange}
-              disabled={!isConnected}
+              disabled={!isZohoConnected}
             >
               <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Select range" />
@@ -93,6 +93,10 @@ export default function Header({
               </SelectContent>
             </Select>
           </div>
+          <SyncButton 
+            dateRange={dateRange} 
+            onSyncComplete={onDataRefresh} 
+          />
           <Button 
             onClick={handleExport}
             disabled={!isConnected || !timesheetData}

@@ -8,10 +8,14 @@ import {
   LogOut, 
   RefreshCw, 
   X,
-  DollarSign
+  DollarSign,
+  Link as LinkIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/use-auth";
+import ConnectModal, { ZohoCredentials } from "@/components/connect-modal";
+import { useState } from "react";
 
 interface SidebarProps {
   isConnected: boolean;
@@ -26,6 +30,8 @@ export default function Sidebar({
   mobileMenuOpen,
   closeMobileMenu 
 }: SidebarProps) {
+  const { user, logoutMutation, isZohoConnected, connectZohoMutation, disconnectZohoMutation } = useAuth();
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [location] = useLocation();
 
   const navItems = [
@@ -100,34 +106,72 @@ export default function Sidebar({
         </nav>
         <div className="pt-2 pb-4 px-4 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center">
-            <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-8 w-8 flex items-center justify-center text-sm font-medium text-gray-500 dark:text-gray-400">
-              US
+            <div className="bg-primary-100 dark:bg-primary-900/30 rounded-full h-8 w-8 flex items-center justify-center text-sm font-medium text-primary">
+              {user?.displayName ? user.displayName.charAt(0).toUpperCase() : user?.username.charAt(0).toUpperCase()}
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">User Smith</p>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">user@example.com</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{user?.displayName || user?.username}</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{user?.email || 'No email'}</p>
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={onDisconnect}
-              disabled={!isConnected}
-              className="text-xs"
-            >
-              <LogOut className="mr-1 h-3 w-3" />
-              Logout
-            </Button>
-            <Button 
-              variant="outline"
-              size="sm"
-              className="text-xs"
-            >
-              <RefreshCw className="mr-1 h-3 w-3" />
-              Refresh
-            </Button>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Zoho Connection:</span>
+              <span className={cn(
+                "text-xs font-medium px-2 py-1 rounded-full",
+                isZohoConnected 
+                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+              )}>
+                {isZohoConnected ? "Connected" : "Disconnected"}
+              </span>
+            </div>
+            
+            <div className="flex items-center justify-between gap-2">
+              {isZohoConnected ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => disconnectZohoMutation.mutate()}
+                  disabled={disconnectZohoMutation.isPending}
+                  className="flex-1 text-xs"
+                >
+                  <LogOut className="mr-1 h-3 w-3" />
+                  {disconnectZohoMutation.isPending ? "Disconnecting..." : "Disconnect Zoho"}
+                </Button>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsConnectModalOpen(true)}
+                  className="flex-1 text-xs"
+                >
+                  <LinkIcon className="mr-1 h-3 w-3" />
+                  Connect Zoho
+                </Button>
+              )}
+              
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => logoutMutation.mutate()}
+                disabled={logoutMutation.isPending}
+                className="flex-1 text-xs"
+              >
+                <LogOut className="mr-1 h-3 w-3" />
+                {logoutMutation.isPending ? "Logging out..." : "Logout"}
+              </Button>
+            </div>
           </div>
+          
+          <ConnectModal 
+            isOpen={isConnectModalOpen}
+            onClose={() => setIsConnectModalOpen(false)}
+            onConnect={async (credentials: ZohoCredentials) => {
+              await connectZohoMutation.mutateAsync(credentials);
+              setIsConnectModalOpen(false);
+            }}
+          />
         </div>
       </div>
     </div>
