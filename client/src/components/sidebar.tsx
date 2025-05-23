@@ -1,0 +1,128 @@
+import { Link, useLocation } from "wouter";
+import { cn } from "@/lib/utils";
+import { 
+  LayoutDashboard, 
+  Table, 
+  User, 
+  Settings, 
+  LogOut, 
+  RefreshCw, 
+  X
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+
+interface SidebarProps {
+  isConnected: boolean;
+  onDisconnect: () => void;
+  mobileMenuOpen: boolean;
+  closeMobileMenu: () => void;
+}
+
+export default function Sidebar({ 
+  isConnected, 
+  onDisconnect,
+  mobileMenuOpen,
+  closeMobileMenu 
+}: SidebarProps) {
+  const [location] = useLocation();
+
+  const navItems = [
+    {
+      name: "Dashboard",
+      path: "/",
+      icon: <LayoutDashboard className="mr-3 h-5 w-5" />,
+      active: location === "/"
+    },
+    {
+      name: "Report Builder",
+      path: "/report-builder",
+      icon: <Table className="mr-3 h-5 w-5" />,
+      active: location === "/report-builder"
+    },
+    {
+      name: "Timesheet",
+      path: "/timesheet",
+      icon: <User className="mr-3 h-5 w-5" />,
+      active: location === "/timesheet"
+    },
+    {
+      name: "Settings",
+      path: "/settings",
+      icon: <Settings className="mr-3 h-5 w-5" />,
+      active: location === "/settings"
+    }
+  ];
+
+  const sidebarClasses = cn(
+    "flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700",
+    "transition-transform duration-300 ease-in-out z-40",
+    "md:flex md:relative md:translate-x-0",
+    {
+      "absolute inset-y-0 left-0 transform translate-x-0": mobileMenuOpen,
+      "absolute inset-y-0 left-0 transform -translate-x-full": !mobileMenuOpen
+    }
+  );
+
+  return (
+    <div className={sidebarClasses}>
+      <div className="flex items-center justify-between h-16 border-b border-gray-200 dark:border-gray-700 px-4">
+        <h1 className="text-xl font-semibold text-primary">ZohoTime Insights</h1>
+        <button 
+          onClick={closeMobileMenu}
+          className="md:hidden text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="h-0 flex-1 flex flex-col overflow-y-auto">
+        <nav className="flex-1 px-2 py-4 space-y-1">
+          {navItems.map((item) => (
+            <Link key={item.path} href={item.path}>
+              <a className={cn(
+                "group flex items-center px-2 py-2 text-sm font-medium rounded-md",
+                item.active 
+                  ? "text-primary bg-primary-50 dark:bg-primary-900/20" 
+                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200"
+              )}>
+                {item.icon}
+                {item.name}
+              </a>
+            </Link>
+          ))}
+        </nav>
+        <div className="pt-2 pb-4 px-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center">
+            <div className="bg-gray-200 dark:bg-gray-700 rounded-full h-8 w-8 flex items-center justify-center text-sm font-medium text-gray-500 dark:text-gray-400">
+              US
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">User Smith</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">user@example.com</p>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onDisconnect}
+              disabled={!isConnected}
+              className="text-xs"
+            >
+              <LogOut className="mr-1 h-3 w-3" />
+              Logout
+            </Button>
+            <Button 
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              <RefreshCw className="mr-1 h-3 w-3" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
