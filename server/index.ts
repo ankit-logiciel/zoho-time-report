@@ -1,11 +1,18 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import session from "express-session";
+import passport from "passport";
+import { createServer, type Server } from "http";
 import { setupVite, serveStatic, log } from "./vite";
+import { storage } from "./storage";
+import apiRoutes from "./routes/index";
+import { configurePassport, createAdminAccount } from "./routes/auth";
 
+// Initialize Express
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Set up logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -37,8 +44,34 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
-
+  // Setup session
+  const SESSION_SECRET = process.env.SESSION_SECRET || "super-secret-key";
+  app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: storage.sessionStore,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    }
+  }));
+  
+  // Configure passport authentication
+  app.use(passport.initialize());
+  app.use(passport.session());
+  configurePassport();
+  
+  // Create admin account
+  await createAdminAccount();
+  
+  // Mount API routes
+  app.use("/api", apiRoutes);
+  
+  // Create HTTP server
+  const server: Server = createServer(app);
+  
+  // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -47,11 +80,7 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // This was causing problems - let's remove it and find a better solution
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Set up Vite for development or serve static files in production
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
