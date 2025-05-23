@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { 
   BarChart, 
   Bar, 
@@ -172,6 +173,7 @@ export default function RevenueOpportunities() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [dateRange, setDateRange] = useState("Last 7 days");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [utilizationTarget, setUtilizationTarget] = useState(80); // Default target is 80%
   
   const { isConnected, connect, disconnect } = useZoho();
 
@@ -180,10 +182,47 @@ export default function RevenueOpportunities() {
     enabled: isConnected,
   });
 
-  // Calculate revenue opportunities
+  // Calculate current utilization rate first - this is our primary metric
+  const currentUtilization = useMemo(() => {
+    if (!timesheetData?.stats) return 0;
+    const { billableHours, totalHours } = timesheetData.stats;
+    return totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
+  }, [timesheetData?.stats]);
+  
+  // Calculate revenue opportunities based on utilization target
   const revenueOpportunities = useMemo(() => {
-    return calculateRevenueOpportunities(timesheetData);
-  }, [timesheetData]);
+    // Recalculate with the current target
+    if (!timesheetData || !timesheetData.employeeHours) return [];
+    
+    const employees = timesheetData.employeeHours;
+    
+    // For each employee, calculate potential revenue opportunity based on target
+    return employees.map((employee: any) => {
+      const optimalUtilization = utilizationTarget / 100; // Convert from percentage
+      const totalCapacity = 40; // 40 hours per week
+      
+      // Calculate current utilization
+      const currentUtilization = employee.totalHours > 0 ? 
+        employee.billableHours / totalCapacity : 0;
+      
+      // Calculate utilization gap
+      const gap = Math.max(0, optimalUtilization - currentUtilization);
+      
+      // Assuming an average hourly rate of $150 for billable work
+      const hourlyRate = 150;
+      const weeklyGapHours = gap * totalCapacity;
+      const potentialRevenue = weeklyGapHours * hourlyRate;
+      
+      return {
+        name: employee.name,
+        potentialRevenue: Math.round(potentialRevenue),
+        currentUtilization: Math.round(currentUtilization * 100),
+        optimalUtilization: utilizationTarget,
+        gap: Math.round(gap * 100)
+      };
+    }).sort((a: RevenueOpportunity, b: RevenueOpportunity) => 
+      b.potentialRevenue - a.potentialRevenue);
+  }, [timesheetData, utilizationTarget]);
 
   // Calculate billable rate opportunities
   const billableRateOpportunities = useMemo(() => {
@@ -196,16 +235,9 @@ export default function RevenueOpportunities() {
     return revenueOpportunities.reduce((sum, item) => sum + item.potentialRevenue, 0);
   }, [revenueOpportunities]);
 
-  // Calculate current utilization rate
-  const currentUtilization = useMemo(() => {
-    if (!timesheetData?.stats) return 0;
-    const { billableHours, totalHours } = timesheetData.stats;
-    return totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
-  }, [timesheetData?.stats]);
-
   // Calculate projected revenue
   const projectedRevenue = useMemo(() => {
-    return generateProjectedRevenue(currentUtilization);
+    return generateProjectedRevenue(currentUtilization || 0);
   }, [currentUtilization]);
 
   const toggleMobileMenu = () => {
@@ -265,11 +297,11 @@ export default function RevenueOpportunities() {
           <div className="py-6 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-center flex-wrap sm:flex-nowrap">
               <div className="flex items-center">
-                <DollarSign className="h-8 w-8 mr-3 text-green-600" />
+                <Clock className="h-8 w-8 mr-3 text-blue-600" />
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Revenue Opportunities</h1>
+                  <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Utilization Insights</h1>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Analyze potential revenue growth based on timesheet data
+                    Analyze revenue potential through improved team utilization
                   </p>
                 </div>
               </div>
@@ -304,6 +336,60 @@ export default function RevenueOpportunities() {
 
           {/* Content */}
           <div className="py-6 px-4 sm:px-6 lg:px-8">
+            {/* Utilization Target Setting Card */}
+            <Card className="bg-white dark:bg-gray-800 mb-5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center">
+                  <BarChart3 className="h-5 w-5 mr-2 text-blue-600" />
+                  Utilization Target Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Current Team Utilization
+                    </span>
+                    <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                      {currentUtilization}%
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Target Utilization
+                      </span>
+                      <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                        {utilizationTarget}%
+                      </span>
+                    </div>
+                    
+                    <Slider
+                      value={[utilizationTarget]}
+                      min={50}
+                      max={95}
+                      step={5}
+                      onValueChange={(value) => setUtilizationTarget(value[0])}
+                      disabled={!isConnected || isLoading}
+                      className="py-2"
+                    />
+                    
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span>50%</span>
+                      <span>65%</span>
+                      <span>80%</span>
+                      <span>95%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 text-sm text-gray-600 dark:text-gray-400">
+                    <p>Adjust the target utilization to see the impact on potential revenue. Industry standard billable utilization is typically between 70-85%.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
             {/* Overview Cards */}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <Card className="bg-white dark:bg-gray-800">
@@ -311,7 +397,41 @@ export default function RevenueOpportunities() {
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Total Revenue Opportunity
+                        Utilization Gap
+                      </span>
+                      {isLoading ? (
+                        <Skeleton className="h-10 w-24 mt-1" />
+                      ) : (
+                        <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                          {Math.max(0, utilizationTarget - currentUtilization)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="rounded-full p-3 bg-blue-100 dark:bg-blue-900/30">
+                      <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                      <div 
+                        className="bg-blue-600 h-2.5 rounded-full" 
+                        style={{ width: `${Math.min(100, (currentUtilization / utilizationTarget) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-sm font-medium flex items-center text-blue-600 dark:text-blue-400">
+                      <ArrowUpRight className="h-4 w-4 mr-1" />
+                      From {currentUtilization}% to {utilizationTarget}% target
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white dark:bg-gray-800">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                        Weekly Revenue Opportunity
                       </span>
                       {isLoading ? (
                         <Skeleton className="h-10 w-24 mt-1" />
@@ -328,7 +448,7 @@ export default function RevenueOpportunities() {
                   <div className="mt-4">
                     <p className="text-sm font-medium flex items-center text-green-600 dark:text-green-400">
                       <ArrowUpRight className="h-4 w-4 mr-1" />
-                      Additional potential weekly revenue
+                      Based on {utilizationTarget}% utilization target
                     </p>
                   </div>
                 </CardContent>
@@ -339,52 +459,24 @@ export default function RevenueOpportunities() {
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Current Utilization
+                        Annual Revenue Impact
                       </span>
                       {isLoading ? (
                         <Skeleton className="h-10 w-24 mt-1" />
                       ) : (
                         <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                          {currentUtilization}%
+                          ${(totalOpportunity * 52).toLocaleString()}
                         </span>
                       )}
                     </div>
-                    <div className="rounded-full p-3 bg-blue-100 dark:bg-blue-900/30">
-                      <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    <div className="rounded-full p-3 bg-green-100 dark:bg-green-900/30">
+                      <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
                     </div>
                   </div>
                   <div className="mt-4">
-                    <p className="text-sm font-medium flex items-center text-blue-600 dark:text-blue-400">
+                    <p className="text-sm font-medium flex items-center text-green-600 dark:text-green-400">
                       <ArrowUpRight className="h-4 w-4 mr-1" />
-                      Increase to 80% for optimal revenue
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white dark:bg-gray-800">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                        Average Billable Rate
-                      </span>
-                      {isLoading ? (
-                        <Skeleton className="h-10 w-24 mt-1" />
-                      ) : (
-                        <span className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                          $125/hr
-                        </span>
-                      )}
-                    </div>
-                    <div className="rounded-full p-3 bg-indigo-100 dark:bg-indigo-900/30">
-                      <BarChart3 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <p className="text-sm font-medium flex items-center text-indigo-600 dark:text-indigo-400">
-                      <ArrowUpRight className="h-4 w-4 mr-1" />
-                      25.6% below market rate
+                      Projected annual gain at {utilizationTarget}% utilization
                     </p>
                   </div>
                 </CardContent>
