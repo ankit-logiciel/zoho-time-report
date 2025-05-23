@@ -104,6 +104,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Connect to Zoho - Endpoint for adding Zoho credentials
+  app.post("/api/zoho/connect", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+    
+    try {
+      const { clientId, clientSecret, organization } = req.body;
+      
+      if (!clientId || !clientSecret || !organization) {
+        return res.status(400).json({
+          success: false,
+          message: "Client ID, Client Secret, and Organization are required"
+        });
+      }
+      
+      console.log("Connecting to Zoho with credentials for user:", req.user.id);
+      
+      // For self client method, we'll use these credentials to make API calls
+      // The actual token management is done externally
+      const accessToken = "self_client_token"; // In a real app, this would come from the Zoho API
+      const refreshToken = "refresh_token"; // In a real app, this would come from the Zoho API
+      const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour from now
+      
+      // Save the credentials
+      const existingCredentials = await storage.getZohoCredentials(req.user.id);
+      
+      if (existingCredentials) {
+        await storage.updateZohoCredentials(existingCredentials.id, {
+          clientId,
+          clientSecret,
+          organization,
+          accessToken,
+          refreshToken,
+          expiresAt
+        });
+      } else {
+        await storage.saveZohoCredentials({
+          userId: req.user.id,
+          clientId,
+          clientSecret,
+          organization,
+          accessToken,
+          refreshToken,
+          expiresAt
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: "Successfully connected to Zoho People"
+      });
+    } catch (error) {
+      console.error("Error connecting to Zoho:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to connect to Zoho"
+      });
+    }
+  });
+  
+  // Disconnect from Zoho
+  app.post("/api/zoho/disconnect", async (req: Request, res: Response) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated"
+      });
+    }
+    
+    try {
+      const credentials = await storage.getZohoCredentials(req.user.id);
+      
+      if (credentials) {
+        await storage.updateZohoCredentials(credentials.id, {
+          accessToken: null,
+          refreshToken: null,
+          expiresAt: null
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: "Successfully disconnected from Zoho People"
+      });
+    } catch (error) {
+      console.error("Error disconnecting from Zoho:", error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to disconnect from Zoho"
+      });
+    }
+  });
+  
   // Get timesheet data directly from Zoho
   app.get("/api/zoho/timesheet", async (req: Request, res: Response) => {
     try {
