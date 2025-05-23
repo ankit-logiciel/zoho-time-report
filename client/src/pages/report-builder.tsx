@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Sidebar from "@/components/sidebar";
-import Header from "@/components/header";
-import ReportBuilder from "@/components/report-builder";
 import ConnectModal from "@/components/connect-modal";
+import ReportBuilder from "@/components/report-builder";
 import { useZoho } from "@/hooks/use-zoho";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, Table, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 export default function ReportBuilderPage() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
@@ -23,6 +29,45 @@ export default function ReportBuilderPage() {
 
   const toggleMobileMenu = () => {
     setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  const handleExport = () => {
+    if (!timesheetData || !timesheetData.timeEntries) return;
+    
+    // Create CSV content
+    const headers = [
+      "Date", 
+      "Project", 
+      "Employee", 
+      "Job", 
+      "Billable Hours", 
+      "Non-Billable Hours", 
+      "Total Hours"
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...timesheetData.timeEntries.map((entry: any) => [
+        entry.date,
+        `"${entry.project}"`,
+        `"${entry.employee}"`,
+        `"${entry.job || ''}"`,
+        entry.billableHours,
+        entry.nonBillableHours,
+        entry.totalHours
+      ].join(','))
+    ].join('\n');
+
+    // Create download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `zoho-timesheet-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -77,30 +122,37 @@ export default function ReportBuilderPage() {
           {/* Page header */}
           <div className="py-6 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-center flex-wrap sm:flex-nowrap">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Report Builder</h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Create custom reports with flexible dimensions and aggregations
-                </p>
+              <div className="flex items-center">
+                <Table className="h-8 w-8 mr-3 text-primary" />
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Report Builder</h1>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Create custom reports with flexible dimensions and aggregations
+                  </p>
+                </div>
               </div>
               <div className="flex items-center mt-4 sm:mt-0 space-x-3">
-                <div>
-                  <Select 
-                    value={dateRange} 
-                    onValueChange={setDateRange}
-                    disabled={!isConnected}
-                  >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Select range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Last 7 days">Last 7 days</SelectItem>
-                      <SelectItem value="This month">This month</SelectItem>
-                      <SelectItem value="Last month">Last month</SelectItem>
-                      <SelectItem value="Custom range">Custom range</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Select 
+                  value={dateRange} 
+                  onValueChange={setDateRange}
+                  disabled={!isConnected}
+                >
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Select range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Last 7 days">Last 7 days</SelectItem>
+                    <SelectItem value="This month">This month</SelectItem>
+                    <SelectItem value="Last month">Last month</SelectItem>
+                    <SelectItem value="Custom range">Custom range</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={handleExport}
+                  disabled={!isConnected || !timesheetData}
+                >
+                  <Download className="mr-2 h-4 w-4" /> Export
+                </Button>
               </div>
             </div>
           </div>
@@ -123,12 +175,3 @@ export default function ReportBuilderPage() {
     </div>
   );
 }
-
-// Import Select components
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
