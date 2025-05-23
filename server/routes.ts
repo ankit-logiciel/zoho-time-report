@@ -79,17 +79,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Route to sync timesheet data from Zoho to database
   app.post("/api/timesheet/sync", syncTimesheetData);
 
-  // Get Zoho connection status
+  // Get Zoho connection status - Public endpoint without authentication
   app.get("/api/zoho/status", async (req: Request, res: Response) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
     try {
-      const credentials = await storage.getZohoCredentials(req.user.id);
+      // For demo purposes, we'll check credentials for user ID 1 (admin)
+      const userId = req.user?.id || 1;
+      const credentials = await storage.getZohoCredentials(userId);
       
       res.json({
         connected: !!credentials?.accessToken,
@@ -104,15 +99,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Connect to Zoho - Endpoint for adding Zoho credentials
+  // Connect to Zoho - Public endpoint for adding Zoho credentials without authentication
   app.post("/api/zoho/connect", async (req: Request, res: Response) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
     try {
       const { clientId, clientSecret, organization } = req.body;
       
@@ -123,7 +111,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      console.log("Connecting to Zoho with credentials for user:", req.user.id);
+      // For demo purposes, we'll use user ID 1 (admin)
+      const userId = req.user?.id || 1;
+      console.log("Connecting to Zoho with credentials for user:", userId);
       
       // For self client method, we'll use these credentials to make API calls
       // The actual token management is done externally
@@ -132,7 +122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expiresAt = new Date(Date.now() + 3600 * 1000); // 1 hour from now
       
       // Save the credentials
-      const existingCredentials = await storage.getZohoCredentials(req.user.id);
+      const existingCredentials = await storage.getZohoCredentials(userId);
       
       if (existingCredentials) {
         await storage.updateZohoCredentials(existingCredentials.id, {
@@ -145,7 +135,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         await storage.saveZohoCredentials({
-          userId: req.user.id,
+          userId,
           clientId,
           clientSecret,
           organization,
@@ -168,17 +158,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Disconnect from Zoho
+  // Disconnect from Zoho - Public endpoint without authentication
   app.post("/api/zoho/disconnect", async (req: Request, res: Response) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({
-        success: false,
-        message: "Not authenticated"
-      });
-    }
-    
     try {
-      const credentials = await storage.getZohoCredentials(req.user.id);
+      // For demo purposes, we'll use user ID 1 (admin)
+      const userId = req.user?.id || 1;
+      const credentials = await storage.getZohoCredentials(userId);
       
       if (credentials) {
         await storage.updateZohoCredentials(credentials.id, {
