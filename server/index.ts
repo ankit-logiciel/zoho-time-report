@@ -47,6 +47,8 @@ app.use((req, res, next) => {
     throw err;
   });
 
+  // This was causing problems - let's remove it and find a better solution
+
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
