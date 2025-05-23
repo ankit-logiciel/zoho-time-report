@@ -1,103 +1,101 @@
-// A direct service for authentication to bypass any issues with the API routes
+// Simple authentication service for client-side management
 
-interface LoginCredentials {
+// Types
+export interface User {
+  id: number;
   username: string;
-  password: string;
+  displayName?: string;
+  email?: string;
 }
 
-interface LoginResponse {
-  success: boolean;
-  user?: {
-    id: number;
-    username: string;
-    displayName?: string;
-    email?: string;
-  };
-  message?: string;
-}
+// User storage key in local storage
+const USER_STORAGE_KEY = 'currentUser';
 
-export async function loginUser(credentials: LoginCredentials): Promise<LoginResponse> {
+// Default admin user for fallback
+const DEFAULT_ADMIN: User = {
+  id: 1,
+  username: 'admin',
+  displayName: 'Admin',
+  email: 'ankit@logiciel.io'
+};
+
+/**
+ * Login with username and password
+ */
+export async function login(username: string, password: string): Promise<User> {
   try {
-    // Use the static admin credentials as a fallback if the API doesn't work
-    if (credentials.username === 'admin' && credentials.password === 'password123') {
-      return {
-        success: true,
-        user: {
-          id: 1,
-          username: 'admin',
-          displayName: 'Admin',
-          email: 'ankit@logiciel.io'
+    // Try server login first
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password }),
+      credentials: 'include'
+    });
+
+    // If the server endpoint works, use that
+    if (response.ok) {
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        if (data.success && data.user) {
+          saveUser(data.user);
+          return data.user;
         }
-      };
+      } catch (e) {
+        console.error('Error parsing login response:', e);
+      }
     }
-    
-    // If not the admin account, attempt to use the API
-    return {
-      success: false,
-      message: 'Invalid username or password'
-    };
   } catch (error) {
-    console.error('Login error:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'An unexpected error occurred'
-    };
+    console.error('Server login failed:', error);
   }
+
+  // Client-side fallback for demo purposes
+  if (username === 'admin' && password === 'password123') {
+    saveUser(DEFAULT_ADMIN);
+    return DEFAULT_ADMIN;
+  }
+
+  throw new Error('Invalid username or password');
 }
 
-export async function logoutUser(): Promise<{ success: boolean }> {
+/**
+ * Logout the current user
+ */
+export async function logout(): Promise<void> {
   try {
-    // Call the logout API
+    // Try server logout
     await fetch('/api/logout', {
       method: 'POST',
       credentials: 'include'
     });
-    
-    return { success: true };
   } catch (error) {
-    console.error('Logout error:', error);
-    return { success: false };
+    console.error('Server logout failed:', error);
+  }
+
+  // Always clear local storage
+  localStorage.removeItem(USER_STORAGE_KEY);
+}
+
+/**
+ * Get the current user
+ */
+export function getCurrentUser(): User | null {
+  const userStr = localStorage.getItem(USER_STORAGE_KEY);
+  if (!userStr) return null;
+
+  try {
+    return JSON.parse(userStr);
+  } catch (e) {
+    console.error('Error parsing user from localStorage:', e);
+    return null;
   }
 }
 
-export async function getCurrentUser(): Promise<LoginResponse['user'] | null> {
-  try {
-    // For now, check if we have user info in localStorage
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      return JSON.parse(storedUser);
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Get current user error:', error);
-    return null;
-  }
-}
-
-export async function changePassword(
-  currentPassword: string,
-  newPassword: string
-): Promise<{ success: boolean; message?: string }> {
-  try {
-    // In a real app, we would call the API
-    // For this simplified version, we'll pretend it worked if the current password is correct
-    if (currentPassword === 'password123') {
-      return {
-        success: true,
-        message: 'Password changed successfully'
-      };
-    }
-    
-    return {
-      success: false,
-      message: 'Current password is incorrect'
-    };
-  } catch (error) {
-    console.error('Change password error:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Failed to change password'
-    };
-  }
+/**
+ * Save user to localStorage
+ */
+function saveUser(user: User): void {
+  localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 }

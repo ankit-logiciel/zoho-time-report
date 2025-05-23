@@ -134,11 +134,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Handle logout
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/logout");
-      return await res.json();
+      try {
+        // Try to use the API first
+        await fetch("/api/logout", {
+          method: "POST",
+          credentials: "include"
+        });
+      } catch (err) {
+        console.error("Logout API call failed:", err);
+      }
+      
+      // Regardless of API success/failure, clear local data
+      return { success: true };
     },
     onSuccess: () => {
+      // Clear user data from cache
       queryClient.setQueryData(["/api/user"], null);
+      
+      // Clear localStorage if we're using that for fallback
+      if (localStorage.getItem("currentUser")) {
+        localStorage.removeItem("currentUser");
+      }
       
       toast({
         title: "Logged out successfully",
